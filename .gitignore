@@ -1,0 +1,8 @@
+node_modules/
+.partyline-secret
+calls/
+skill/*.zip
+.partyline-invites.json
+.env
+HANDOFF.md
+scripts/pitch-demo.ts

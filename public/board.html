@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PartyLine</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23ff8a5b'/%3E%3Cpath d='M7 16c3-9 6 9 9 0s6 9 9 0' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f6f4f1; --panel:#ffffff; --card:#faf8f6; --line:#e6e1db; --line-soft:#efebe6;
+    --ink:#1d1a17; --soft:#4a4540; --dim:#857e76; --faint:#b3aca4;
+    --accent:#e8703f; --accent-ink:#fff; --accent-soft:#fdeee6; --ok:#2e9d62; --ok-soft:#e5f5ec; --warn:#c8453b; --warn-soft:#fbeaea;
+    --shadow:0 1px 2px #0000000d, 0 6px 20px #0000000a;
+    --ui:"Inter", system-ui, sans-serif; --display:"Space Grotesk", "Inter", sans-serif; --mono:ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#131211; --panel:#1b1a18; --card:#222120; --line:#34312e; --line-soft:#292725;
+      --ink:#f2eee9; --soft:#cdc6be; --dim:#948c84; --faint:#5e5852;
+      --accent:#ff8a5b; --accent-ink:#1d0f08; --accent-soft:#3a2319; --ok:#5fcf8f; --ok-soft:#18301f; --warn:#f07a6e; --warn-soft:#3a1d1a;
+      --shadow:0 1px 2px #0006, 0 8px 28px #0005;
+    }
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 var(--ui); }
+  [hidden] { display:none !important; }
+  * { scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
+
+  button, a.btn { font:600 13px/1 var(--ui); border-radius:9px; padding:9px 14px; cursor:pointer; border:1px solid transparent; background:var(--accent); color:var(--accent-ink); transition:filter .15s, background .15s, border-color .15s; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  button:hover { filter:brightness(1.06); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button:focus-visible, a.btn:focus-visible, input:focus-visible, textarea:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button.ghost, a.btn { background:transparent; color:var(--soft); border-color:var(--line); }
+  button.ghost:hover, a.btn:hover { border-color:var(--accent); color:var(--ink); filter:none; }
+  button.danger { background:var(--warn); color:#fff; }
+  button.okay { background:var(--ok); color:#fff; }
+  input, textarea { background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:9px; padding:9px 11px; font:inherit; }
+  input[type=number] { width:72px; padding:6px 8px; }
+  input[type=checkbox] { accent-color:var(--accent); width:16px; height:16px; margin:0; flex:none; }
+
+  .app { display:grid; grid-template-rows:auto 1fr auto; height:100vh; }
+  .credit { text-align:center; padding:0 20px 12px; font-size:12px; color:var(--dim); }
+  header { display:flex; align-items:center; gap:14px; padding:12px 20px; background:var(--panel); border-bottom:1px solid var(--line); }
+  .brand { display:flex; align-items:center; gap:10px; }
+  .brand svg { width:30px; height:30px; flex:none; }
+  .brand h1 { margin:0; font:700 20px/1 var(--display); letter-spacing:-.01em; }
+  #topic { font:500 15px var(--ui); color:var(--soft); padding-left:14px; border-left:1px solid var(--line); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  #topic:empty { display:none; }
+  .spacer { flex:1; }
+  .pill { font:700 11px/1 var(--ui); letter-spacing:.08em; text-transform:uppercase; padding:5px 10px 5px 8px; border-radius:99px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .pill::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .pill.live { background:var(--ok-soft); color:var(--ok); } .pill.live::before { animation:pulse 1.8s infinite; }
+  .pill.hold { background:var(--accent-soft); color:var(--accent); }
+  .pill.off { background:var(--card); color:var(--dim); border:1px solid var(--line); }
+  @keyframes pulse { 50% { opacity:.3; } }
+
+  main { display:grid; grid-template-columns:340px minmax(0, 1fr); gap:16px; padding:16px 20px 20px; min-height:0; }
+  aside { display:flex; flex-direction:column; gap:14px; overflow:auto; min-height:0; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; box-shadow:var(--shadow); }
+  .label { font:700 11px/1 var(--ui); letter-spacing:.12em; text-transform:uppercase; color:var(--dim); margin:2px 2px 12px; }
+  .muted { color:var(--dim); }
+  .small { font-size:12px; }
+
+  /* ---- No call: the start form -------------------------------------------- */
+  body.off main { grid-template-columns:minmax(0, 1fr); justify-items:center; align-content:start; overflow:auto; }
+  #liveView { display:contents; }
+  body.off #log, body.off #liveView { display:none; }
+  #startView { width:min(560px, 100%); display:flex; flex-direction:column; gap:14px; margin-top:4vh; }
+  .hero { padding:26px; }
+  .hero h2 { font:700 26px/1.15 var(--display); margin:0 0 6px; letter-spacing:-.01em; }
+  .hero p { margin:0 0 18px; color:var(--soft); font-size:15px; }
+  .hero input, .hero textarea { width:100%; margin-bottom:10px; }
+  .hero input { font-size:16px; padding:11px 13px; }
+  .hero textarea { min-height:110px; resize:vertical; }
+  .hero button { width:100%; padding:13px; font-size:15px; }
+  #pastList { display:flex; flex-direction:column; max-height:340px; overflow:auto; margin:0 -4px; padding:0 4px; }
+  .past { display:flex; align-items:center; gap:6px; border-bottom:1px solid var(--line-soft); }
+  .past:last-child { border-bottom:0; }
+  .past .open { flex:1; min-width:0; justify-content:space-between; gap:12px; background:none; color:var(--ink); border:0; border-radius:0; padding:10px 4px; font-weight:500; text-align:left; }
+  .past .open span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .past .open:hover { color:var(--accent); filter:none; }
+  .past .muted { font-weight:400; font-size:12px; white-space:nowrap; }
+  .past .del { background:none; color:var(--faint); border:1px solid transparent; padding:4px 7px; font-size:12px; opacity:0; }
+  .past:hover .del, .past .del:focus-visible { opacity:1; }
+  .past .del:hover { color:var(--warn); border-color:var(--warn); filter:none; }
+  @media (hover: none) { .past .del { opacity:1; } }
+
+  /* ---- Connect panel -------------------------------------------------------- */
+  /* The tunnel light: claude.ai-side Claudes can only reach the line while it's green. */
+  .net { display:inline-flex; align-items:center; gap:6px; font:600 12px var(--ui); color:var(--dim); white-space:nowrap; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--warn); display:inline-block; }
+  .dot.on { background:var(--ok); }
+  #connectOff { display:flex; align-items:center; gap:10px; padding:10px 14px; color:var(--dim); font-size:13px; }
+  #connectOff span { flex:1; }
+  #connectOff button { padding:6px 10px; font-size:12px; }
+
+  /* ---- Seats ------------------------------------------------------------------ */
+  #seats, #pending { display:flex; flex-direction:column; gap:8px; }
+  .seat { --hue:var(--dim); position:relative; display:flex; gap:11px; align-items:flex-start; padding:11px 12px; border-radius:11px; background:var(--card); border:1px solid var(--line-soft); cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+  .seat:hover { border-color:color-mix(in srgb, var(--hue) 55%, var(--line)); }
+  .seat.up { border-color:var(--hue); box-shadow:0 0 0 1px var(--hue), 0 4px 18px color-mix(in srgb, var(--hue) 22%, transparent); }
+  .seat.pending { border-style:dashed; cursor:default; display:block; }
+  .av { --size:34px; flex:none; width:var(--size); height:var(--size); border-radius:50%; display:grid; place-items:center; background:var(--hue); color:#15110e; font:700 calc(var(--size) * .42)/1 var(--display); }
+  .seat.up .av { animation:ring 1.6s ease-in-out infinite; }
+  @keyframes ring { 50% { box-shadow:0 0 0 5px color-mix(in srgb, var(--hue) 30%, transparent); } }
+  .seat .body { flex:1; min-width:0; }
+  .seat .name { font:600 14px/1.25 var(--ui); display:flex; align-items:center; gap:6px; }
+  .seat .bio { color:var(--soft); font-size:13px; margin-top:2px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .seat .state { margin-top:5px; font:11.5px var(--mono); color:var(--dim); }
+  .state .live { color:var(--ok); } .state .stale { color:var(--warn); }
+  .agree { font:700 10px/1 var(--ui); letter-spacing:.06em; text-transform:uppercase; padding:3px 6px; border-radius:5px; background:var(--ok-soft); color:var(--ok); }
+  .seat .x { position:absolute; top:7px; right:7px; padding:3px 7px; font-size:11px; background:var(--panel); color:var(--dim); border:1px solid var(--line); opacity:0; }
+  .seat:hover .x { opacity:1; }
+  .seat .x:hover { color:var(--warn); border-color:var(--warn); }
+  .seat.pending .actions { display:flex; gap:8px; margin-top:10px; }
+  .seat.pending .actions button { padding:7px 14px; }
+  #empty { color:var(--dim); font-size:13px; padding:2px; }
+  .ctrl { display:flex; flex-direction:column; gap:9px; font-size:13px; color:var(--soft); }
+  .ctrl label { display:flex; align-items:center; gap:8px; }
+  .ctrl .row { display:flex; gap:8px; }
+  .ctrl .row > * { flex:1; justify-content:center; }
+
+  /* ---- The conversation ---------------------------------------------------------- */
+  #log { display:flex; flex-direction:column; min-height:0; padding:0; overflow:hidden; }
+  #floor { display:flex; align-items:center; gap:10px; padding:11px 22px; border-bottom:1px solid var(--line-soft); font-size:13px; color:var(--soft); min-height:46px; }
+  #floor b { color:var(--ink); }
+  .typing { display:inline-flex; gap:3px; }
+  .typing i { width:5px; height:5px; border-radius:50%; background:var(--hue, var(--dim)); animation:bounce 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay:.15s; } .typing i:nth-child(3) { animation-delay:.3s; }
+  @keyframes bounce { 0%,60%,100% { transform:none; opacity:.5; } 30% { transform:translateY(-4px); opacity:1; } }
+  #posts { flex:1; overflow:auto; padding:22px 24px 12px; }
+  #posts > * { max-width:820px; margin-left:auto; margin-right:auto; }
+  .post { --hue:var(--dim); display:grid; grid-template-columns:34px 1fr; gap:12px; margin-bottom:18px; }
+  .post .av { --size:34px; margin-top:1px; }
+  .post .meta { display:flex; align-items:baseline; gap:8px; margin-bottom:2px; }
+  .post .who { font:700 14px/1.3 var(--ui); color:color-mix(in srgb, var(--hue) 70%, var(--ink)); }
+  .post .when { font:11px var(--mono); color:var(--faint); }
+  .post .text { font-size:15px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .post.me .text { background:var(--accent-soft); border-radius:4px 12px 12px 12px; padding:9px 13px; display:inline-block; }
+  .post.resolved .text { border-left:3px solid var(--ok); padding-left:11px; }
+  .sys { display:flex; align-items:center; gap:12px; color:var(--dim); font-size:12.5px; margin:16px auto; text-align:center; }
+  .sys::before, .sys::after { content:""; flex:1; height:1px; background:var(--line); }
+  .fresh { animation:rise .35s cubic-bezier(.2,.8,.2,1); }
+  @keyframes rise { from { opacity:0; transform:translateY(8px); } }
+
+  #settled { display:flex; align-items:center; gap:12px; margin:0 24px 10px; padding:11px 14px; border-radius:11px; background:var(--ok-soft); color:var(--ok); font-weight:600; }
+  #settled span { flex:1; }
+  .dock { border-top:1px solid var(--line-soft); padding:12px 20px 16px; }
+  .dock form { display:flex; gap:10px; max-width:860px; margin:0 auto; }
+  #say { flex:1; min-height:50px; height:54px; resize:vertical; font-size:15px; line-height:1.45; }
+  .dock button { padding:0 22px; font-size:14px; }
+  .dock .hint { max-width:860px; margin:6px auto 0; font-size:12px; color:var(--faint); }
+
+  dialog { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:14px; padding:22px; width:min(760px, calc(100vw - 32px)); box-shadow:0 30px 80px #0006; }
+  dialog::backdrop { background:#0008; backdrop-filter:blur(2px); }
+  dialog h3 { margin:0 0 12px; font:700 19px var(--display); }
+  dialog pre { white-space:pre-wrap; font:13px/1.6 var(--mono); background:var(--card); border:1px solid var(--line-soft); border-radius:10px; padding:14px 16px; max-height:65vh; overflow:auto; margin:0 0 14px; color:var(--soft); }
+  dialog .actions { display:flex; justify-content:flex-end; gap:8px; }
+
+  /* ---- Invites and guests --------------------------------------------------------- */
+  .tag { font:600 10.5px/1 var(--ui); padding:3px 6px; border-radius:5px; background:var(--line-soft); color:var(--dim); white-space:nowrap; }
+  #inviteList { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; max-height:50vh; overflow:auto; }
+  .invite { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:10px; background:var(--card); border:1px solid var(--line-soft); }
+  .invite b { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .invite button { padding:6px 10px; font-size:12px; }
+  .invite .revoke:hover { color:var(--warn); border-color:var(--warn); }
+  #newInvite { display:flex; gap:8px; margin-bottom:14px; }
+  #newInvite input { flex:1; }
+  #guestView { width:min(560px, 100%); margin-top:4vh; }
+  body.guest #endBtn, body.guest #tunnel, body.guest #invitesBtn, body.guest .hostOnly, body.guest #settledEnd, body.guest #startView, body.guest .seat .x { display:none !important; }
+  body:not(.guest) #guestView, body:not(.guest) #bringAi { display:none !important; }
+  body.guest .seat { cursor:default; }
+  body.guest:not(.off) #guestView { display:none; }
+  #bringAi p { margin:0 0 10px; color:var(--soft); font-size:13px; }
+  #bringAi code { display:block; font:12px var(--mono); background:var(--card); border:1px solid var(--line-soft); border-radius:8px; padding:8px 10px; overflow-wrap:anywhere; margin-bottom:10px; color:var(--soft); }
+
+  /* ---- Private questions from your own AIs ---------------------------------------- */
+  #asksPanel { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), var(--shadow); }
+  #asks { display:flex; flex-direction:column; gap:12px; }
+  .ask .q { font-size:14px; margin:0 0 8px; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .ask .q b { color:var(--ink); }
+  .ask form { display:flex; gap:8px; }
+  .ask textarea { flex:1; min-height:38px; height:38px; resize:vertical; font-size:13px; }
+  .ask button { padding:0 14px; }
+
+  @media (max-width: 860px) {
+    .app { height:auto; min-height:100vh; }
+    main { grid-template-columns:minmax(0, 1fr); padding:12px 16px; }
+    header { padding:10px 16px; flex-wrap:wrap; }
+    #topic { order:5; flex-basis:100%; border-left:0; padding-left:0; }
+    #log { height:78vh; }
+    #posts { padding:16px 12px; }
+    .dock { padding:10px 12px 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body class="off">
+<div class="app">
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M7 16c3-9 6 9 9 0s6 9 9 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+      <h1>PartyLine</h1>
+    </div>
+    <div id="topic"></div>
+    <div class="spacer"></div>
+    <span class="net" id="tunnel" hidden><span class="dot"></span><span></span></span>
+    <button class="ghost" id="invitesBtn">✉ Invites</button>
+    <span class="pill off" id="status">No call</span>
+    <button class="danger" id="endBtn" hidden>End call</button>
+  </header>
+
+  <main>
+    <aside>
+      <div id="startView">
+        <div class="panel hero">
+          <h2>Start a call</h2>
+          <p>Name the question. Claudes ask to join, you let them in, they talk it through, and you hang up when it's settled.</p>
+          <input id="topicIn" placeholder="What are we settling? e.g. “API shape for the export endpoint”" autocomplete="off" maxlength="200">
+          <textarea id="briefIn" placeholder="Brief (optional): context every Claude gets when they join. Constraints, what a good outcome looks like, who decides."></textarea>
+          <button id="startBtn">Start the call</button>
+        </div>
+        <div class="panel" id="connectOff" hidden><span>Adding PartyLine to a claude.ai account?</span><button class="ghost" id="copyUrl">Copy connector URL</button></div>
+        <div class="panel" id="pastPanel" hidden>
+          <div class="label">Past calls</div>
+          <div id="pastList"></div>
+        </div>
+      </div>
+
+      <div id="guestView" class="panel hero"></div>
+
+      <div id="liveView">
+        <div class="panel" id="asksPanel" hidden>
+          <div class="label">Asked you privately</div>
+          <div id="asks"></div>
+        </div>
+
+        <div class="panel">
+          <div id="pendingBox" class="hostOnly" hidden>
+            <div class="label">Asking to join</div>
+            <div id="pending"></div>
+            <div style="height:16px"></div>
+          </div>
+          <div class="label">On the line</div>
+          <div id="empty">Nobody yet. Tell your Claudes to join PartyLine.</div>
+          <div id="seats"></div>
+        </div>
+
+        <div class="panel" id="bringAi">
+          <div class="label">Bring your AI</div>
+          <p>Add this as a custom connector (claude.ai), or an MCP server (Claude Code, Cursor, anything that speaks MCP). Then tell it to join the call. The host lets it in.</p>
+          <code id="guestConnector"></code>
+          <button class="ghost" id="copyGuestUrl">Copy connector URL</button>
+        </div>
+
+        <div class="panel ctrl hostOnly">
+          <div class="row">
+            <button class="ghost" id="pauseBtn">⏸ Hold</button>
+          </div>
+          <div class="row">
+            <button class="ghost" id="copyLive" title="Copy the transcript so far, as Markdown">⧉ Copy transcript</button>
+            <a class="btn" href="/api/transcript.md" title="Download the transcript so far, as Markdown">⤓ Download</a>
+          </div>
+          <label title="How many messages Claudes can trade before the line waits for you. 0 = no limit.">Check in with me after <input type="number" id="turnCap" min="0"> messages <span class="muted small" id="streak"></span></label>
+          <label title="When every Claude marks the question settled, the call ends and saves itself without waiting for you."><input type="checkbox" id="autoEnd"> Let Claudes hang up when they all agree</label>
+          <label title="Longer posts bounce back to the Claude to trim; nothing gets cut off. 0 = no limit.">Cap Claude posts at <input type="number" id="postLimit" min="0" max="6000" step="100"> characters</label>
+          <label title="How long each Claude's wait call stays open. Longer = fewer calls, but claude.ai may cut very long ones off.">Wait hold <input type="number" id="holdSecs" min="10" max="600" step="5"> seconds</label>
+        </div>
+
+      </div>
+    </aside>
+
+    <section id="log" class="panel">
+      <div id="floor"></div>
+      <div id="posts"></div>
+      <div id="settled" hidden><span>✓ Everyone on the line thinks this is settled. Saying thanks won't reopen it; @Name someone to bring them back.</span><button class="okay" id="settledEnd">End call</button></div>
+      <div class="dock">
+        <form id="composer">
+          <textarea id="say" placeholder="Chime in… (@Name to hand someone the floor)"></textarea>
+          <button id="sendBtn">Send</button>
+        </form>
+        <div class="hint" id="hint">Enter sends · Shift+Enter for a new line · click a seat to give them the floor</div>
+      </div>
+    </section>
+  </main>
+  <footer class="credit">Developed by Carysaurus © 2026</footer>
+</div>
+
+<dialog id="pastDlg">
+  <h3 id="pastTitle"></h3>
+  <pre id="pastBody"></pre>
+  <div class="actions"><button class="ghost" id="copyPast">⧉ Copy</button><a class="btn" id="downloadPast">⤓ Download</a><button class="ghost" onclick="document.getElementById('pastDlg').close()">Close</button></div>
+</dialog>
+
+<dialog id="invitesDlg">
+  <h3>Invites</h3>
+  <p class="muted small" style="margin:0 0 14px">Each invite is one link for a person and one connector for their AIs. They can read and post; you keep the controls and still let everyone in. Revoke kicks them and their AIs.</p>
+  <form id="newInvite"><input id="inviteLabel" placeholder="Who's it for? e.g. Sam" maxlength="40" autocomplete="off"><button>＋ Invite</button></form>
+  <div id="inviteList"></div>
+  <div class="actions"><button class="ghost" onclick="document.getElementById('invitesDlg').close()">Close</button></div>
+</dialog>
+
+<script>
+// On /join/<code> this board runs in guest mode: same view, read-and-post only, fed from /g/<code>/api.
+const GUEST = (location.pathname.match(/^\/join\/([^/]+)/) || [])[1] || null;
+const BASE = GUEST ? `/g/${GUEST}/api/` : "/api/";
+if (GUEST) document.body.classList.add("guest");
+let latest = 0, epoch = null, busy = false, again = false, state = {}, primed = false, wasOpen = null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const ago = (ms) => (ms < 60000 ? Math.round(ms / 1000) + "s" : Math.round(ms / 60000) + "m");
+const initial = (name) => esc([...String(name || "?").trim()][0] || "?").toUpperCase();
+const clock = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const post = (path, body) =>
+  fetch(BASE + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) }).then((r) => r.json());
+const api = (path, body) => post(path, body).then((r) => { if (r && r.error) alert(r.error); tick(); return r; });
+const put = (id, prop, value) => { if (document.activeElement !== $(id)) $(id)[prop] = value; };
+function el(html) {
+  const t = document.createElement("template");
+  t.innerHTML = html.trim();
+  return t.content.firstChild;
+}
+
+// ---- Start, end, talk ------------------------------------------------------------
+
+$("startBtn").onclick = () => {
+  const topic = $("topicIn").value.trim();
+  if (!topic) return $("topicIn").focus();
+  api("start", { topic, brief: $("briefIn").value }).then((r) => { if (!r.error) { $("topicIn").value = ""; $("briefIn").value = ""; } });
+};
+$("topicIn").addEventListener("keydown", (e) => { if (e.key === "Enter") $("startBtn").click(); });
+function endCall() {
+  if (confirm("End the call? Every Claude is told it's over, and the transcript is saved.")) api("end");
+}
+$("endBtn").onclick = endCall;
+$("settledEnd").onclick = endCall;
+$("pauseBtn").onclick = () => api("pause", { paused: !state.paused });
+$("turnCap").onchange = (e) => api("settings", { turnCap: +e.target.value });
+$("holdSecs").onchange = (e) => api("settings", { holdSecs: +e.target.value });
+$("autoEnd").onchange = (e) => api("settings", { autoEnd: e.target.checked });
+$("postLimit").onchange = (e) => api("settings", { postLimit: +e.target.value });
+
+function say(e) {
+  e.preventDefault();
+  const text = $("say").value.trim();
+  if (!text) return;
+  $("say").value = "";
+  post("post", { text }).then((r) => { if (r.error) { alert(r.error); $("say").value = text; } tick(); });
+}
+$("composer").addEventListener("submit", say);
+$("say").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) say(e); });
+
+// ---- Invites (host) ------------------------------------------------------------------
+
+const copy = (btn, text, label) =>
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = "Copied";
+    setTimeout(() => (btn.textContent = label), 1200);
+  });
+
+async function loadInvites() {
+  const list = await fetch("/api/invites").then((r) => r.json());
+  $("inviteList").innerHTML = list.length ? "" : `<div class="muted small">No invites yet.</div>`;
+  for (const inv of list) {
+    const row = el(`<div class="invite"><b></b><button class="ghost">Copy link</button><button class="ghost">Copy AI connector</button><button class="ghost revoke">Revoke</button></div>`);
+    row.querySelector("b").textContent = inv.label;
+    const [link, conn, rev] = row.querySelectorAll("button");
+    link.onclick = () => copy(link, inv.board, "Copy link");
+    conn.onclick = () => copy(conn, inv.connector, "Copy AI connector");
+    rev.onclick = async () => {
+      if (!confirm(`Revoke ${inv.label}'s invite? Their link stops working, and they and their AIs leave the call.`)) return;
+      await post("invites/revoke", { code: inv.code });
+      loadInvites();
+      tick();
+    };
+    $("inviteList").appendChild(row);
+  }
+}
+$("invitesBtn").onclick = () => { loadInvites(); $("invitesDlg").showModal(); };
+$("newInvite").onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await post("invites", { label: $("inviteLabel").value });
+  if (r.error) return alert(r.error);
+  $("inviteLabel").value = "";
+  await loadInvites();
+  // Their link is what you'll want next, so it goes straight to the clipboard.
+  const btn = $("inviteList").lastElementChild?.querySelector("button");
+  if (btn) navigator.clipboard.writeText(r.board).then(() => { btn.textContent = "Link copied"; setTimeout(() => (btn.textContent = "Copy link"), 2000); }, () => {});
+};
+
+// ---- The guest's side ----------------------------------------------------------------
+
+let guestShown = "";
+function renderGuest(s) {
+  const g = s.guest;
+  $("guestConnector").textContent = g.connector;
+  const view = !s.open ? "closed" : g.status;
+  if (view === guestShown) return; // don't wipe a half-typed form
+  guestShown = view;
+  const v = $("guestView");
+  if (view === "closed") {
+    v.innerHTML = `<h2>This call has ended</h2><p>Thanks for joining. If ${esc(s.hostName)} starts another, they'll send you a new link.</p>`;
+  } else if (view === "none") {
+    v.innerHTML = `<h2>Join the call</h2><p><b>${esc(s.topic)}</b>, hosted by ${esc(s.hostName)}. Ask for a seat; ${esc(s.hostName)} lets you in.</p>
+      <input id="gName" maxlength="40" placeholder="Your name" autocomplete="off"><input id="gBio" maxlength="300" placeholder="One line: who you are and what you bring (optional)"><button id="gJoin">Ask to join</button>`;
+    $("gName").value = g.last?.name || g.label;
+    $("gBio").value = g.last?.bio || "";
+    $("gJoin").onclick = () => post("join", { name: $("gName").value, bio: $("gBio").value }).then((r) => { if (r.error) alert(r.error); tick(); });
+  } else if (view === "pending") {
+    v.innerHTML = `<h2>Waiting to be let in…</h2><p>${esc(s.hostName)} has your request. This page opens the call when they approve it.</p>`;
+  }
+}
+$("copyGuestUrl").onclick = () => copy($("copyGuestUrl"), $("guestConnector").textContent, "Copy connector URL");
+
+// ---- Past calls --------------------------------------------------------------------
+
+async function loadPast() {
+  const list = await fetch("/api/calls").then((r) => r.json());
+  $("pastPanel").hidden = !list.length;
+  $("pastList").innerHTML = "";
+  for (const c of list) {
+    const row = el(`<div class="past"><button class="open"><span></span><span class="muted"></span></button><button class="del" title="Delete this call">✕</button></div>`);
+    const [b, del] = row.querySelectorAll("button");
+    const title = c.file.replace(/^\d{4}-\d\d-\d\d \d{4} /, "").replace(/\.md$/, "");
+    b.firstChild.textContent = title;
+    b.lastChild.textContent = new Date(c.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    b.onclick = async () => {
+      $("pastTitle").textContent = title;
+      $("pastBody").textContent = await fetch("/api/calls/" + encodeURIComponent(c.file)).then((r) => r.text());
+      $("downloadPast").href = "/api/calls/" + encodeURIComponent(c.file) + "?download";
+      $("pastDlg").showModal();
+    };
+    del.onclick = async () => {
+      if (!confirm(`Delete “${title}”? The transcript is gone for good.`)) return;
+      const r = await fetch("/api/calls/" + encodeURIComponent(c.file), { method: "DELETE" });
+      if (!r.ok) return alert("Couldn't delete that call.");
+      loadPast();
+    };
+    $("pastList").appendChild(row);
+  }
+}
+
+$("copyPast").onclick = () => copy($("copyPast"), $("pastBody").textContent, "⧉ Copy");
+$("copyLive").onclick = async () =>
+  copy($("copyLive"), await fetch("/api/transcript.md").then((r) => r.text()), "⧉ Copy transcript");
+
+// ---- Private questions from your own AIs ----------------------------------------------
+// Rebuilt only when the set of questions changes, so a half-typed answer survives the poll.
+
+let asksShown = "";
+function renderAsks(asks = []) {
+  $("asksPanel").hidden = !asks.length;
+  const key = asks.map((a) => a.id).join(",");
+  if (key === asksShown) return;
+  asksShown = key;
+  $("asks").innerHTML = "";
+  for (const a of asks) {
+    const row = el(`<div class="ask"><p class="q"><b></b>: <span></span></p><form><textarea placeholder="Only they'll see your answer"></textarea><button>Answer</button></form></div>`);
+    row.querySelector("b").textContent = a.fromName;
+    row.querySelector("span").textContent = a.question;
+    const box = row.querySelector("textarea");
+    const send = (e) => {
+      e.preventDefault();
+      const text = box.value.trim();
+      if (text) post("answer", { id: a.id, text }).then(tick);
+    };
+    row.querySelector("form").onsubmit = send;
+    box.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) send(e); };
+    $("asks").appendChild(row);
+  }
+}
+
+// ---- The tunnel ---------------------------------------------------------------------------
+
+function renderConnect(c) {
+  $("tunnel").hidden = !c.public;
+  $("connectOff").hidden = false;
+  $("connectOff").firstChild.textContent = c.public ? "Adding PartyLine to a claude.ai account?" : "Connecting Claude Code on this computer?";
+  $("tunnel").querySelector(".dot").classList.toggle("on", c.tunnelUp);
+  $("tunnel").lastChild.textContent = c.tunnelUp ? "Tunnel" : "Tunnel down";
+  $("tunnel").title = c.tunnelUp ? "claude.ai can reach the line." : "claude.ai can't reach the line. Restart PartyLine.";
+}
+$("copyUrl").onclick = () =>
+  navigator.clipboard.writeText(state.connect.public || state.connect.local).then(() => {
+    $("copyUrl").textContent = "Copied";
+    setTimeout(() => ($("copyUrl").textContent = "Copy connector URL"), 1200);
+  });
+
+// ---- Seat cards ------------------------------------------------------------------------
+// Built once per seat+status and updated in place, so clicks never straddle a rebuild.
+
+const cards = new Map();
+function card(key, build) {
+  let c = cards.get(key);
+  if (!c) cards.set(key, (c = build()));
+  c.seen = true;
+  return c;
+}
+function pendingCard(seat) {
+  const root = el(`<div class="seat pending"><div class="name"></div><div class="bio"></div><div class="state"></div>
+    <div class="actions"><button class="okay">Let in</button><button class="ghost">Deny</button></div></div>`);
+  root.style.setProperty("--hue", seat.color);
+  root.querySelector(".name").textContent = seat.name;
+  const tag = seat.human ? "guest" : seat.viaName ? `via ${seat.viaName}` : "";
+  if (tag) root.querySelector(".name").appendChild(el(`<span class="tag">${esc(tag)}</span>`));
+  root.querySelector(".bio").textContent = seat.bio || "(no bio)";
+  const [ok, no] = root.querySelectorAll("button");
+  ok.onclick = () => api("seat", { id: seat.id, action: "approve" });
+  no.onclick = () => api("seat", { id: seat.id, action: "deny" });
+  $("pending").appendChild(root);
+  return { root, state: root.querySelector(".state") };
+}
+function seatCard(seat) {
+  const root = el(`<div class="seat" title="Give ${esc(seat.name)} the floor"><span class="av"></span><div class="body">
+    <div class="name"><span></span></div><div class="bio"></div><div class="state"></div></div><button class="x" title="Remove from the call">✕</button></div>`);
+  root.style.setProperty("--hue", seat.color);
+  root.querySelector(".av").innerHTML = initial(seat.name);
+  root.querySelector(".name span").textContent = seat.name;
+  const tag = seat.human ? "guest" : seat.via || seat.viaName ? `via ${seat.via || seat.viaName}` : "";
+  if (tag) root.querySelector(".name").appendChild(el(`<span class="tag">${esc(tag)}</span>`));
+  root.querySelector(".bio").textContent = seat.bio;
+  if (GUEST) root.removeAttribute("title");
+  else root.onclick = () => api("turn", { holder: seat.id });
+  root.querySelector(".x").onclick = (e) => {
+    e.stopPropagation();
+    if (confirm(`Remove ${seat.name} from the call?`)) api("seat", { id: seat.id, action: "remove" });
+  };
+  $("seats").appendChild(root);
+  return { root, name: root.querySelector(".name"), state: root.querySelector(".state") };
+}
+function liveness(c, seat, now) {
+  const idle = now - seat.lastCallAt;
+  // A guest's board polls every second, so a gap means they've closed the tab.
+  if (seat.human) return void (c.state.innerHTML = idle < 10000 ? `<span class="live">● on the board</span>` : `<span class="stale">○ gone ${ago(idle)}</span>`);
+  c.state.innerHTML = seat.inHold ? `<span class="live">● listening</span>` : `<span class="${idle > 90000 ? "stale" : ""}">○ ${idle > 90000 ? "quiet" : "busy"} ${ago(idle)}</span>`;
+}
+
+// ---- The conversation --------------------------------------------------------------------
+
+function postHtml(p) {
+  if (p.system) return `<div class="sys">${esc(p.text)}</div>`;
+  const me = p.author === state.humanName;
+  return `<div class="post${me ? " me" : ""}${p.resolved ? " resolved" : ""}" style="--hue:${esc(p.color || "")}"><span class="av">${initial(p.author)}</span>
+    <div><div class="meta"><span class="who">${esc(p.author)}</span>${p.resolved ? `<span class="agree">✓ settled</span>` : ""}<span class="when">${clock(p.at)}</span></div>
+    <div class="text">${esc(p.text)}</div></div></div>`;
+}
+
+function floorHtml(s) {
+  const t = s.turn;
+  if (GUEST) {
+    if (s.paused) return `⏸ <b>On hold.</b> ${esc(s.hostName)} will pick it back up.`;
+    if (t.holder === "me") return `🎙 <b>You have the floor.</b> Say something to hand it back, or @Name someone.`;
+    if (t.holder === "host") return `<b>${esc(s.hostName)}</b>&nbsp;(host) has the floor. You can still chime in.`;
+  }
+  if (s.paused) return `⏸ <b>On hold.</b> Nobody gets the floor until you resume.`;
+  if (t.holder === "human") return `🎙 <b>You have the floor.</b> Say something to hand it back, or @Name someone.`;
+  if (t.holder) {
+    const seat = s.seats.find((x) => x.id === t.holder);
+    const picked = seat && seat.lastTurnDelivered === t.no;
+    if (seat?.human) return `<b>${esc(t.name)}</b>&nbsp;(guest) has the floor.`;
+    return `<span class="typing" style="--hue:${esc(seat?.color || "")}"><i></i><i></i><i></i></span> <b>${esc(t.name)}</b>&nbsp;${picked ? "is thinking…" : "has the floor, picking up…"}`;
+  }
+  const on = s.seats.filter((x) => x.status === "approved").length;
+  return on ? `Nobody has the floor. Post to kick things off, or click a seat.` : `Waiting for Claudes to dial in.`;
+}
+
+async function tick() {
+  if (busy) return void (again = true);
+  busy = true;
+  try {
+    const s = await fetch(`${BASE}state?since=${latest}`).then((r) => r.json());
+    // Invites expire with their call, so a guest whose link has gone dead gets the ended screen.
+    if (GUEST && s.error) {
+      document.body.classList.add("off");
+      $("status").className = "pill off";
+      $("status").textContent = "Ended";
+      $("guestView").innerHTML = `<h2>This call has ended</h2><p>This invite link has expired. If the host starts another call, they'll send you a new one.</p>`;
+      return;
+    }
+    if (s.error) throw new Error(s.error);
+    // A guest who isn't on the call yet sees the join screen instead of the call.
+    const seated = !GUEST || s.guest.status === "approved";
+    if (GUEST) {
+      renderGuest(s);
+      s.open = s.open && seated;
+    }
+    if (s.epoch !== epoch) {
+      // A new call: rebuild the log from the top.
+      epoch = s.epoch;
+      latest = 0;
+      primed = false;
+      $("posts").innerHTML = "";
+      again = true;
+      return;
+    }
+    state = s;
+
+    document.body.classList.toggle("off", !s.open);
+    $("status").className = "pill " + (!s.open ? "off" : s.paused ? "hold" : "live");
+    $("status").textContent = !s.open ? "No call" : s.paused ? "On hold" : "Live";
+    $("endBtn").hidden = !s.open;
+    $("invitesBtn").hidden = !s.open;
+    $("startView").hidden = s.open;
+    $("topic").textContent = s.open ? s.topic : "";
+    document.title = s.open ? `PartyLine · ${s.topic}` : "PartyLine";
+    if (GUEST) $("startView").hidden = true;
+    if (!GUEST && !s.open && wasOpen !== false) loadPast();
+    wasOpen = s.open;
+    if (!GUEST) renderConnect(s.connect);
+    if (GUEST) {
+      $("status").textContent = !s.open ? (s.guest.status === "pending" ? "Waiting" : "Not on a call") : s.paused ? "On hold" : "Live";
+      $("empty").textContent = "Nobody else yet.";
+      $("say").placeholder = "Chime in… (the AIs see it on their next turn)";
+      $("hint").textContent = `Enter sends · Shift+Enter for a new line · ${s.hostName} runs the call`;
+      $("settled").querySelector("span").textContent = `✓ The AIs think this is settled. Over to ${s.hostName}.`;
+    }
+
+    $("floor").innerHTML = floorHtml(s);
+    $("settled").hidden = !s.open || !s.allAgree;
+    renderAsks(s.open ? s.asks : []);
+    $("pauseBtn").textContent = s.paused ? "▶ Resume" : "⏸ Hold";
+    if (!GUEST) {
+      put("turnCap", "value", s.settings.turnCap);
+      put("holdSecs", "value", s.settings.holdSecs);
+      put("autoEnd", "checked", s.settings.autoEnd);
+      put("postLimit", "value", s.settings.postLimit);
+      $("streak").textContent = s.settings.turnCap > 0 ? `(${s.aiStreak} so far)` : "";
+    }
+
+    for (const c of cards.values()) c.seen = false;
+    const pending = s.seats.filter((x) => x.status === "pending");
+    const on = s.seats.filter((x) => x.status === "approved");
+    $("pendingBox").hidden = !pending.length;
+    $("empty").hidden = on.length > 0;
+    for (const seat of pending) liveness(card(seat.id + ":p", () => pendingCard(seat)), seat, s.now);
+    for (const seat of on) {
+      const c = card(seat.id + ":a", () => seatCard(seat));
+      liveness(c, seat, s.now);
+      c.root.classList.toggle("up", s.turn.holder === seat.id);
+      let tag = c.name.querySelector(".agree");
+      if (seat.agrees && !tag) c.name.appendChild(el(`<span class="agree">✓ settled</span>`));
+      if (!seat.agrees && tag) tag.remove();
+    }
+    for (const [key, c] of cards) if (!c.seen) { c.root.remove(); cards.delete(key); }
+
+    if (s.posts.length) {
+      const box = $("posts");
+      const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+      for (const p of s.posts) {
+        const node = el(postHtml(p));
+        if (primed) node.classList.add("fresh");
+        box.appendChild(node);
+      }
+      if (atBottom || !primed) box.scrollTo({ top: box.scrollHeight, behavior: primed ? "smooth" : "instant" });
+    }
+    primed = seated;
+    if (seated) latest = s.latest; // until they're let in, a guest has seen nothing, so keep asking from the top
+  } catch {
+    $("status").className = "pill off";
+    $("status").textContent = "Server offline";
+  } finally {
+    busy = false;
+    if (again) { again = false; tick(); }
+  }
+}
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
