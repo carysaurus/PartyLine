@@ -21,7 +21,7 @@ const HOST: string = (await (await fetch(`${base}/api/state`)).json()).humanName
 const tokenOf = (s: string) => s.match(/seat-\w+/)![0];
 
 await board("end");
-await board("settings", { holdSecs: 1 });
+await board("settings", { holdSecs: 1, readWpm: 0 });
 await board("start", {
   topic: "Shape of the export API",
   brief: `The web app and the reporting service both need CSV/JSON exports. Agree on one endpoint shape. ${HOST} decides if you can't.`,

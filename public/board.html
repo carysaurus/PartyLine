@@ -224,7 +224,7 @@
           <textarea id="briefIn" placeholder="Brief (optional): context every Claude gets when they join. Constraints, what a good outcome looks like, who decides."></textarea>
           <button id="startBtn">Start the call</button>
         </div>
-        <div class="panel" id="connectOff" hidden><span>Adding PartyLine to a claude.ai account?</span><button class="ghost" id="copyUrl">Copy connector URL</button></div>
+        <div class="panel" id="connectOff" hidden><span>Adding PartyLine to a claude.ai account?</span><button class="ghost" id="copyUrl">Copy connector URL</button><button class="ghost" id="rotateUrl" title="New secret. The old URL stops working at once; only between calls.">Rotate secret</button></div>
         <div class="panel" id="pastPanel" hidden>
           <div class="label">Past calls</div>
           <div id="pastList"></div>
@@ -268,6 +268,7 @@
           <label title="How many messages Claudes can trade before the line waits for you. 0 = no limit.">Check in with me after <input type="number" id="turnCap" min="0"> messages <span class="muted small" id="streak"></span></label>
           <label title="When every Claude marks the question settled, the call ends and saves itself without waiting for you."><input type="checkbox" id="autoEnd"> Let Claudes hang up when they all agree</label>
           <label title="Longer posts bounce back to the Claude to trim; nothing gets cut off. 0 = no limit.">Cap Claude posts at <input type="number" id="postLimit" min="0" max="6000" step="100"> characters</label>
+          <label title="Your reading speed. After a Claude posts, the next Claude waits long enough for you to read it before it's given the floor. Posting or clicking a seat skips the wait. 0 = no wait.">Reading speed <input type="number" id="readWpm" min="0" max="2000" step="10"> words/min</label>
           <label title="How long each Claude's wait call stays open. Longer = fewer calls, but claude.ai may cut very long ones off.">Wait hold <input type="number" id="holdSecs" min="10" max="600" step="5"> seconds</label>
         </div>
 
@@ -299,7 +300,7 @@
 <dialog id="invitesDlg">
   <h3>Invites</h3>
   <p class="muted small" style="margin:0 0 14px">Each invite is one link for a person and one connector for their AIs. They can read and post; you keep the controls and still let everyone in. Revoke kicks them and their AIs.</p>
-  <form id="newInvite"><input id="inviteLabel" placeholder="Who's it for? e.g. Sam" maxlength="40" autocomplete="off"><button>＋ Invite</button></form>
+  <form id="newInvite"><input id="inviteLabel" placeholder="Which person is it for? e.g. Sam" maxlength="40" autocomplete="off"><button>＋ Invite</button></form>
   <div id="inviteList"></div>
   <div class="actions"><button class="ghost" onclick="document.getElementById('invitesDlg').close()">Close</button></div>
 </dialog>
@@ -343,6 +344,7 @@ $("turnCap").onchange = (e) => api("settings", { turnCap: +e.target.value });
 $("holdSecs").onchange = (e) => api("settings", { holdSecs: +e.target.value });
 $("autoEnd").onchange = (e) => api("settings", { autoEnd: e.target.checked });
 $("postLimit").onchange = (e) => api("settings", { postLimit: +e.target.value });
+$("readWpm").onchange = (e) => api("settings", { readWpm: +e.target.value });
 
 function say(e) {
   e.preventDefault();
@@ -405,7 +407,7 @@ function renderGuest(s) {
   if (view === "closed") {
     v.innerHTML = `<h2>This call has ended</h2><p>Thanks for joining. If ${esc(s.hostName)} starts another, they'll send you a new link.</p>`;
   } else if (view === "none") {
-    v.innerHTML = `<h2>Join the call</h2><p><b>${esc(s.topic)}</b>, hosted by ${esc(s.hostName)}. Ask for a seat; ${esc(s.hostName)} lets you in.</p>
+    v.innerHTML = `<h2>Join the call</h2><p>Hosted by ${esc(s.hostName)}. Ask for a seat; ${esc(s.hostName)} lets you in, and the call opens here.</p>
       <input id="gName" maxlength="40" placeholder="Your name" autocomplete="off"><input id="gBio" maxlength="300" placeholder="One line: who you are and what you bring (optional)"><button id="gJoin">Ask to join</button>`;
     $("gName").value = g.last?.name || g.label;
     $("gBio").value = g.last?.bio || "";
@@ -484,6 +486,16 @@ function renderConnect(c) {
   $("tunnel").lastChild.textContent = c.tunnelUp ? "Tunnel" : "Tunnel down";
   $("tunnel").title = c.tunnelUp ? "claude.ai can reach the line." : "claude.ai can't reach the line. Restart PartyLine.";
 }
+$("rotateUrl").onclick = async () => {
+  if (!confirm("Rotate the connector secret? The old URL stops working at once, for every Claude that uses it. Invite links aren't affected.")) return;
+  const r = await api("rotate-secret");
+  if (r && r.ok)
+    alert(
+      'New secret in place. Click "Copy connector URL" for the new one, then:\n\n' +
+        "• claude.ai: Settings → Connectors → PartyLine, and paste in the new URL.\n" +
+        "• Claude Code: claude mcp remove partyline, then claude mcp add --transport http --scope user partyline <new URL>",
+    );
+};
 $("copyUrl").onclick = () =>
   navigator.clipboard.writeText(state.connect.public || state.connect.local).then(() => {
     $("copyUrl").textContent = "Copied";
@@ -505,7 +517,7 @@ function pendingCard(seat) {
     <div class="actions"><button class="okay">Let in</button><button class="ghost">Deny</button></div></div>`);
   root.style.setProperty("--hue", seat.color);
   root.querySelector(".name").textContent = seat.name;
-  const tag = seat.human ? "guest" : seat.viaName ? `via ${seat.viaName}` : "";
+  const tag = seat.human ? "human guest" : seat.viaName ? `AI, for ${seat.viaName}` : "AI";
   if (tag) root.querySelector(".name").appendChild(el(`<span class="tag">${esc(tag)}</span>`));
   root.querySelector(".bio").textContent = seat.bio || "(no bio)";
   const [ok, no] = root.querySelectorAll("button");
@@ -520,7 +532,7 @@ function seatCard(seat) {
   root.style.setProperty("--hue", seat.color);
   root.querySelector(".av").innerHTML = initial(seat.name);
   root.querySelector(".name span").textContent = seat.name;
-  const tag = seat.human ? "guest" : seat.via || seat.viaName ? `via ${seat.via || seat.viaName}` : "";
+  const tag = seat.human ? "human guest" : seat.via || seat.viaName ? `AI, for ${seat.via || seat.viaName}` : "AI";
   if (tag) root.querySelector(".name").appendChild(el(`<span class="tag">${esc(tag)}</span>`));
   root.querySelector(".bio").textContent = seat.bio;
   if (GUEST) root.removeAttribute("title");
@@ -562,6 +574,8 @@ function floorHtml(s) {
     const seat = s.seats.find((x) => x.id === t.holder);
     const picked = seat && seat.lastTurnDelivered === t.no;
     if (seat?.human) return `<b>${esc(t.name)}</b>&nbsp;(guest) has the floor.`;
+    const readSecs = Math.ceil((s.readUntil - s.now) / 1000);
+    if (!picked && readSecs > 0) return `⏱ Next up: <b>${esc(t.name)}</b>&nbsp;in ${readSecs}s, once you've had time to read.`;
     return `<span class="typing" style="--hue:${esc(seat?.color || "")}"><i></i><i></i><i></i></span> <b>${esc(t.name)}</b>&nbsp;${picked ? "is thinking…" : "has the floor, picking up…"}`;
   }
   const on = s.seats.filter((x) => x.status === "approved").length;
@@ -628,6 +642,7 @@ async function tick() {
       put("holdSecs", "value", s.settings.holdSecs);
       put("autoEnd", "checked", s.settings.autoEnd);
       put("postLimit", "value", s.settings.postLimit);
+      put("readWpm", "value", s.settings.readWpm);
       $("streak").textContent = s.settings.turnCap > 0 ? `(${s.aiStreak} so far)` : "";
     }
 

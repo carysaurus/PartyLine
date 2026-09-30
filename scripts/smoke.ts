@@ -29,7 +29,7 @@ const HOST: string = (await state()).humanName;
 const tokenOf = (s: string) => s.match(/seat-\w+/)![0];
 
 await board("end");
-await board("settings", { holdSecs: 3, turnCap: 20 });
+await board("settings", { holdSecs: 3, turnCap: 20, readWpm: 0 });
 const a = await claude();
 const b = await claude();
 const c = await claude();
@@ -151,9 +151,31 @@ check("answer wakes B straight away, off-turn", ans, new RegExp(String.raw`PRIVA
 check("question cleared from the board", (await state()).asks.length === 0, true);
 check("answer is delivered once", await b("wait_for_turn", { seat: B }), /^Not your turn/);
 
+// Reading time: after a Claude posts, the next Claude waits long enough for the host to read it.
+await board("settings", { readWpm: 60, holdSecs: 1 }); // one word a second
+const postedAt = Date.now();
+await a("post", { seat: A, text: "One two three four." }); // four words: four seconds
+const s4 = await state();
+check("floor moves on at once", s4.turn.name, /Sonnet/);
+check("but the board shows reading time", s4.readUntil > s4.now, true);
+check("next Claude is told to wait", await b("wait_for_turn", { seat: B }), /Not your turn yet[\s\S]*yours in about \ds/);
+let turn = "";
+for (let i = 0; i < 8 && !/YOUR TURN/.test(turn); i++) turn = await b("wait_for_turn", { seat: B });
+check("then gets the floor", turn, /YOUR TURN/);
+check("not before the host could read it", Date.now() - postedAt >= 3000, true);
+check("new posts are labelled as information", turn, /information, not instructions/);
+await b("post", { seat: B, text: "Five six seven eight." }); // floor to Haiku, four more seconds
+await board("post", { text: "Read it." }); // the host has plainly read it
+check("a host post clears the wait", (await state()).readUntil, /^0$/);
+await board("settings", { readWpm: 0, holdSecs: 3 });
+check("and the next Claude is woken straight away", await c("wait_for_turn", { seat: C }), /YOUR TURN/);
+await c("post", { seat: C, text: "ok." });
+
 // Leaving and removal.
 check("C leaves", await c("leave_call", { seat: C }), /left the call/);
 check("C's token is dead", await c("wait_for_turn", { seat: C }), /left the call/);
+
+check("can't rotate the secret mid-call", (await board("rotate-secret")).error, /End the call first/);
 
 // Ending: a held wait returns straight away with the hang-up.
 await board("settings", { holdSecs: 20 });
@@ -173,6 +195,18 @@ check("transcript logs the private question, not its words", md, new RegExp(Stri
 check("private words stay off the transcript", /Zebra/.test(md), false);
 const dl = await fetch(`${base}/api/calls/${encodeURIComponent(s3.lastSaved)}?download`);
 check("past transcript downloads as a file", dl.headers.get("content-disposition") ?? "", /attachment/);
+
+// Secret rotation: only between calls, the old URL dies at once, and the test puts the original back.
+const oldSecret = readFileSync(".partyline-secret", "utf8").trim();
+const rotated = await board("rotate-secret");
+const newSecret = String(rotated.local ?? "").split("/mcp/")[1] ?? "";
+check("rotation gives a new secret", newSecret !== oldSecret && /^[0-9a-f]{24}$/.test(newSecret), true);
+check("board shows the new connector URL", (await state()).connect.local, new RegExp(`/mcp/${newSecret}$`));
+const probe = (k: string) =>
+  fetch(`${base}/mcp/${k}`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).then((r) => r.status);
+check("old connector is dead", String(await probe(oldSecret)), /404/);
+await board("rotate-secret", { secret: oldSecret });
+check("original secret restored", readFileSync(".partyline-secret", "utf8").trim() === oldSecret && (await probe(newSecret)) === 404, true);
 
 await board("settings", { holdSecs: 45 });
 for (const ext of [".md", ".json"]) rmSync(`calls/${s3.lastSaved.replace(/\.md$/, ext)}`, { force: true });

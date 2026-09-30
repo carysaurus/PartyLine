@@ -1,7 +1,7 @@
 // Invite test: a guest joins from their own board, their AI dials in on the invite connector,
 // the guest posts and takes the floor, and revoking kicks them both.
 // Usage: PORT=8790 npx tsx scripts/invite-test.ts   (server must be running; ends whatever call is live)
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
@@ -26,7 +26,7 @@ function check(label: string, got: unknown, want: RegExp | boolean) {
 const tokenOf = (s: string) => s.match(/seat-\w+/)![0];
 
 await board("end");
-await board("settings", { holdSecs: 3, turnCap: 20 });
+await board("settings", { holdSecs: 3, turnCap: 20, readWpm: 0 });
 check("no invites without a call", (await board("invites", { label: "Sam" })).error, /Start a call first/);
 
 await board("start", { topic: "_invite: the skill bug", brief: "Sam's skill misreads dates." });
@@ -51,20 +51,24 @@ const gs = (await state()).seats.find((s: any) => s.human);
 check("host sees the guest pending", gs?.status, /pending/);
 check("guest sees their pending status", (await gState()).guest.status, /pending/);
 check("pending guest sees no posts", (await gState()).posts.length, /^0$/);
+check("pending guest isn't told the topic", (await gState()).topic, /^$/);
 await board("seat", { id: gs.id, action: "approve" });
 
 const gv = await gState();
-check("approved guest sees the whole call", gv.posts.map((p: any) => p.text).join("|"), /Call started[\s\S]*Sam \(guest\) joined/);
+check("approved guest sees the whole call", gv.posts.map((p: any) => p.text).join("|"), /Call started[\s\S]*Sam \(human guest\) joined/);
 check("guest sees no seat tokens", JSON.stringify(gv), /^(?![\s\S]*seat-)/);
 check("guest's view of the host AI", gv.seats[0]?.name, /Opus/);
 
 // The guest's own AI dials in on the invite connector.
 const theirs = await ai(inv.code);
-const C = tokenOf(await theirs("join_call", { name: "Sonnet", bio: "Sam's AI. Knows the skill." }));
+const theirJoin = await theirs("join_call", { name: "Sonnet", bio: "Sam's AI. Knows the skill." });
+check("join_call names whose call it is", theirJoin, /'s call as Sonnet/);
+check("a pending seat isn't told the topic", /skill bug/.test(theirJoin), false);
+const C = tokenOf(theirJoin);
 const cs = (await state()).seats.find((s: any) => s.id === C);
 check("host sees the guest's AI tagged via Sam", cs?.viaName, /Sam/);
 await board("seat", { id: C, action: "approve" });
-check("guest's AI gets a roster naming the guest", await theirs("wait_for_turn", { seat: C }), /Sam: a human guest[\s\S]*Sonnet \(Sam's AI\)/);
+check("guest's AI gets a roster naming the guest", await theirs("wait_for_turn", { seat: C }), /Sam: a human guest[\s\S]*Sonnet: an AI, here for Sam/);
 
 // Guests chime in any time; posting off the floor doesn't move it.
 await board("post", { text: "Opus, explain the bug." }); // host kicks off, floor goes to the first AI
@@ -93,5 +97,9 @@ check("second invite works mid-call", (await fetch(`${base}/join/${other.code}`)
 await board("end");
 check("ending the call expires its invites", (await fetch(`${base}/join/${other.code}`)).status, /404/);
 check("no invites left after the call", (await fetch(`${base}/api/invites`).then((r) => r.json())).length, /^0$/);
+
+// Clean up the test transcript, like the other suites do.
+const last = (await state()).lastSaved;
+for (const ext of [".md", ".json"]) rmSync(`calls/${last.replace(/\.md$/, ext)}`, { force: true });
 console.log(failed ? `\n${failed} FAILED` : "\nAll passed.");
 process.exit(failed ? 1 : 0);

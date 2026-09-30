@@ -57,7 +57,11 @@ class Call {
     holdSecs: Number(process.env.HOLD_SECONDS || 45), // how long one wait_for_turn call holds
     autoEnd: false, // Claudes hang up themselves once they all agree
     postLimit: Number(process.env.POST_LIMIT ?? 1200), // longest Claude post, in characters (0 = no limit). Longer ones bounce back to be trimmed.
+    readWpm: Number(process.env.READ_WPM ?? 200), // the host's reading speed; after a Claude posts, the next Claude waits long enough to read it (0 = no wait)
   };
+  /** Reading time: no Claude is handed the floor before this, so the humans can keep up. 0 = none pending. */
+  readUntil = 0;
+  private readTimer: ReturnType<typeof setTimeout> | null = null;
 
   private listeners = new Set<() => void>();
 
@@ -112,6 +116,7 @@ class Call {
     this.departed = [];
     this.gone.clear();
     this.turn = { holder: null, no: 0, from: null };
+    this.setReadingTime(0);
     this.lastClaude = null;
     this.paused = false;
     this.aiStreak = 0;
@@ -123,6 +128,7 @@ class Call {
 
   /** End the call, tell every Claude it's over, and save the transcript. */
   end(note = `${this.humanName} ended the call.`) {
+    this.setReadingTime(0);
     for (const s of this.seats.values()) this.gone.set(s.token, "ended");
     this.system(note);
     let saved = "";
@@ -210,9 +216,9 @@ class Call {
     return [...this.seats.values()].find((s) => s.human && s.via === code);
   }
 
-  /** " (guest)" or " (via Sam)", for rosters and transcripts. */
+  /** " (human guest)" or " (AI, for Sam)", for rosters and transcripts. */
   tag(s: Seat) {
-    return s.human ? " (guest)" : s.viaName ? ` (via ${s.viaName})` : "";
+    return s.human ? " (human guest)" : ` (AI, for ${s.viaName ?? this.humanName})`;
   }
 
   nameTaken(name: string) {
@@ -275,6 +281,23 @@ class Call {
     this.notify();
   }
 
+  /**
+   * Reading time. After a Claude posts, the floor moves on at once but the next Claude isn't *told* until the
+   * humans have had time to read the post, at the host's reading speed. `ms` = 0 clears it (the host has
+   * plainly read it, or the call is over). The timer wakes any Claude holding in wait_for_turn.
+   */
+  private setReadingTime(ms: number) {
+    if (this.readTimer) clearTimeout(this.readTimer);
+    this.readTimer = null;
+    this.readUntil = ms > 0 ? Date.now() + ms : 0;
+    if (ms > 0) this.readTimer = setTimeout(() => { this.readTimer = null; this.notify(); }, ms);
+  }
+
+  /** Seconds left before the next Claude is handed the floor, or 0. */
+  readingSecsLeft() {
+    return Math.max(0, Math.ceil((this.readUntil - Date.now()) / 1000));
+  }
+
   /** The next Claude after `after` in join order, skipping `after` itself. Null if there's nobody else. */
   private nextAfter(after: string | null) {
     const ids = this.claudes().map((s) => s.token);
@@ -325,6 +348,9 @@ class Call {
     this.lastClaude = token;
     this.passes = 0;
     this.aiStreak++;
+    // Give the humans time to read it before the next Claude is woken.
+    const words = text.split(/\s+/).filter(Boolean).length;
+    this.setReadingTime(this.settings.readWpm > 0 ? (words / this.settings.readWpm) * 60_000 : 0);
 
     if (this.allAgree() && this.settings.autoEnd) {
       this.end("Everyone agreed it's settled, so the call ended itself.");
@@ -355,6 +381,7 @@ class Call {
     this.add(this.humanName, text, { color: PALETTE[0] });
     this.aiStreak = 0;
     this.passes = 0;
+    this.setReadingTime(0); // the host has plainly read the last post
     const at = this.mentioned(text);
     // Once everyone's agreed, a "thanks, all" mustn't reopen it and set off a round of re-agreeing.
     // Only an @mention (or a seat click) brings the Claudes back in.
@@ -432,6 +459,7 @@ class Call {
   hostGive(holder: string | null) {
     this.aiStreak = 0;
     this.passes = 0;
+    this.setReadingTime(0);
     this.giveTurn(holder, HUMAN);
   }
 
@@ -447,7 +475,7 @@ class Call {
 
   /** True when this seat holds a turn it hasn't been told about yet. */
   pendingTurnFor(seat: Seat) {
-    return !this.paused && this.turn.holder === seat.token && this.turn.no > seat.lastTurnDelivered;
+    return !this.paused && this.turn.holder === seat.token && this.turn.no > seat.lastTurnDelivered && Date.now() >= this.readUntil;
   }
 
   nameOf(token: string | null) {
@@ -460,6 +488,8 @@ class Call {
     let now: string;
     if (this.paused) now = `${this.humanName} has put the call on hold.`;
     else if (this.turn.holder === HUMAN) now = `${this.humanName} (the human host) has the floor. Humans take longer, so expect a wait.`;
+    else if (this.turn.holder === seat.token && this.readingSecsLeft() > 0)
+      now = `You're next: the floor is yours in about ${this.readingSecsLeft()}s, once the humans have had time to read the last post.`;
     else if (this.turn.holder === seat.token) now = "You have the floor.";
     else if (this.turn.holder && this.seats.get(this.turn.holder)?.human)
       now = `${this.nameOf(this.turn.holder)} (a human guest) has the floor. Humans take longer, so expect a wait.`;
@@ -478,7 +508,7 @@ class Call {
       ...this.approved().map((s) =>
         s.human
           ? `• ${s.name}: a human guest, invited by ${this.humanName}. ${s.bio}`.trim()
-          : `• ${s.name}${s.viaName ? ` (${s.viaName}'s AI)` : ""}: ${s.bio || "(no bio)"}`,
+          : `• ${s.name}: an AI, here for ${s.viaName ?? this.humanName}. ${s.bio || "(no bio)"}`,
       ),
     ].join("\n");
   }

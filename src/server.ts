@@ -25,7 +25,7 @@ let publicBase = TUNNEL && !QUICK ? `https://${TUNNEL_HOST}` : "";
 
 // The MCP endpoint lives at a secret path so a stranger who finds the tunnel can't dial in.
 const SECRET_FILE = ".partyline-secret";
-const SECRET =
+let SECRET =
   process.env.PARTYLINE_SECRET ||
   (existsSync(SECRET_FILE)
     ? readFileSync(SECRET_FILE, "utf8").trim()
@@ -35,7 +35,7 @@ const SECRET =
         return s;
       })());
 
-const LOCAL_URL = `http://localhost:${PORT}/mcp/${SECRET}`;
+const localUrl = () => `http://localhost:${PORT}/mcp/${SECRET}`;
 const publicUrl = () => (publicBase ? `${publicBase}/mcp/${SECRET}` : "");
 
 const app = express();
@@ -81,6 +81,7 @@ app.get("/api/state", localOnly, (req, res) => {
     humanName: call.humanName,
     humanHex: PALETTE[0],
     turn: { ...call.turn, name: call.nameOf(call.turn.holder) },
+    readUntil: call.readUntil,
     paused: call.paused,
     aiStreak: call.aiStreak,
     allAgree: call.allAgree(),
@@ -89,7 +90,7 @@ app.get("/api/state", localOnly, (req, res) => {
     posts: call.since(since),
     seats: [...call.seats.values()].map(({ token, via, ...s }) => ({ id: token, ...s })),
     asks: call.openAsks(HUMAN).map(({ id, at, fromName, question }) => ({ id, at, fromName, question })),
-    connect: { local: LOCAL_URL, public: publicUrl(), tunnelUp },
+    connect: { local: localUrl(), public: publicUrl(), tunnelUp },
     lastSaved: call.lastSaved,
     now: Date.now(),
   });
@@ -141,6 +142,20 @@ app.post("/api/pause", localOnly, express.json(), (req, res) => {
   res.json({ ok: true });
 });
 
+// A new connector secret. The old URL dies at once, so every AI dialled in on it would be cut off: only between
+// calls. Invite codes are separate and unaffected. `secret` lets the tests put the original back afterwards.
+app.post("/api/rotate-secret", localOnly, express.json(), (req, res) => {
+  if (call.open) return res.status(409).json({ error: "End the call first. Rotating the secret cuts off every Claude dialled in on it." });
+  if (process.env.PARTYLINE_SECRET) return res.status(409).json({ error: "The secret is set by PARTYLINE_SECRET in your environment or .env. Change it there and restart." });
+  const given = String(req.body?.secret ?? "");
+  if (given && !/^[0-9a-f]{24}$/.test(given)) return res.status(400).json({ error: "A secret is 24 hex characters." });
+  SECRET = given || randomBytes(12).toString("hex");
+  writeFileSync(SECRET_FILE, SECRET);
+  console.log(`Secret rotated. Claude Code URL:   ${localUrl()}`);
+  if (publicUrl()) console.log(`                 claude.ai URL:     ${publicUrl()}`);
+  res.json({ ok: true, local: localUrl(), public: publicUrl() });
+});
+
 app.post("/api/settings", localOnly, express.json(), (req, res) => {
   const b = req.body;
   const s: Partial<typeof call.settings> = {};
@@ -148,6 +163,7 @@ app.post("/api/settings", localOnly, express.json(), (req, res) => {
   if (Number.isFinite(b.turnCap) && b.turnCap >= 0) s.turnCap = Math.round(b.turnCap);
   if (Number.isFinite(b.holdSecs) && b.holdSecs >= 1 && b.holdSecs <= 600) s.holdSecs = Math.round(b.holdSecs);
   if (Number.isFinite(b.postLimit) && b.postLimit >= 0 && b.postLimit <= 6000) s.postLimit = Math.round(b.postLimit);
+  if (Number.isFinite(b.readWpm) && b.readWpm >= 0 && b.readWpm <= 2000) s.readWpm = Math.round(b.readWpm);
   call.updateSettings(s);
   res.json({ ok: true });
 });
@@ -219,7 +235,7 @@ guest.get("/state", (req, res) => {
     guest: { status: me?.status ?? "none", label: invite.label, last: invite.last ?? null, connector: inviteLinks(invite.code).connector },
     open: call.open,
     epoch: call.epoch,
-    topic: call.topic,
+    topic: mine ? call.topic : "", // nothing about the call, not even its topic, until the host lets you in
     brief: mine ? call.brief : "",
     humanName: me?.name ?? invite.last?.name ?? invite.label, // "you", for styling your own posts
     hostName: call.humanName,
@@ -280,7 +296,7 @@ app.listen(PORT, "127.0.0.1", (err?: Error) => {
     process.exit(1);
   }
   console.log(`PartyLine board:   http://localhost:${PORT}/`);
-  console.log(`Claude Code URL:   ${LOCAL_URL}`);
+  console.log(`Claude Code URL:   ${localUrl()}`);
   if (publicUrl()) console.log(`claude.ai URL:     ${publicUrl()}`);
   if (TUNNEL) startTunnel();
 });
